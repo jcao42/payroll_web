@@ -1,56 +1,41 @@
-from flask import Flask, render_template, request, session
-import csv
-import io
-import os
-from datetime import datetime
+from flask import Flask, render_template, request, redirect
+from datetime import date
+from models import db, Employee, Entry
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+# Create tables on startup
+with app.app_context():
+    db.create_all()
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    today = date.today()
+
     if request.method == 'POST':
-        try:
-            num_employees = int(request.form['num_employees'])
-            session['num_employees'] = num_employees
-            return render_template('index.html', num_employees=num_employees, show_form=True)
-        except:
-            return render_template('index.html', show_form=False)
-    return render_template('index.html', show_form=False)
+        for emp in Employee.query.all():
+            hours_str = request.form.get(f"hours_{emp.id}", "")
+            if hours_str.strip() != "":
+                try:
+                    hours = float(hours_str)
+                    if hours >= 0:
+                        entry = Entry(employee_id=emp.id, date=today, hours=hours)
+                        db.session.add(entry)
+                except ValueError:
+                    pass  # Ignore invalid input
+        db.session.commit()
+        return redirect('/')
 
-@app.route('/results', methods=['POST'])
-def results():
-    employees = []
-    num_employees = session.get('num_employees', 0)
-    date = request.form.get('date', datetime.today().strftime('%Y-%m-%d'))
+    employees = Employee.query.all()
 
-    log_dir = 'logs'
-    os.makedirs(log_dir, exist_ok=True)
-    filename = os.path.join(log_dir, f'payroll_log_{date}.csv')
+    # Get today's hours
+    entries = Entry.query.filter_by(date=today).all()
+    entry_map = {e.employee_id: e.hours for e in entries}
 
-    with open(filename, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['Date', 'Name', 'Rate', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Total Hours', 'Total Pay'])
-
-        for i in range(1, num_employees + 1):
-            name = request.form.get(f'name_{i}', 'N/A')
-            rate = float(request.form.get(f'rate_{i}', 0))
-            hours = [float(request.form.get(f'{day}_{i}', 0)) for day in ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']]
-            total_hours = sum(hours)
-            total_pay = total_hours * rate
-
-            writer.writerow([date, name, rate] + hours + [total_hours, total_pay])
-
-            employees.append({
-                'name': name,
-                'rate': rate,
-                'hours': hours,
-                'total_hours': total_hours,
-                'total_pay': total_pay
-            })
-
-    return render_template('results.html', employees=employees, date=date)
+    return render_template("index.html", employees=employees, entry_map=entry_map, today=today)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
+    app.run(debug=True)

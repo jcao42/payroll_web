@@ -2,45 +2,45 @@
 <html>
 <head>
     <title>Payroll Tracker</title>
-    <script>
-        function setTodayDate() {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
-            document.getElementById('date').value = `${yyyy}-${mm}-${dd}`;
-        }
-        window.onload = setTodayDate;
-    </script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
+        input { width: 60px; }
+        .total { font-weight: bold; color: green; }
+    </style>
 </head>
 <body>
-    <h1>Payroll Tracker</h1>
-
-    {% if not show_form %}
-        <form method="POST">
-            <label>How many employees?</label>
-            <input type="number" name="num_employees" min="1" required>
-            <button type="submit">Next</button>
-        </form>
-    {% endif %}
-
-    {% if show_form %}
-        <form method="POST" action="/results">
-            <input type="hidden" name="date" id="date">
-            {% for i in range(1, num_employees + 1) %}
-                <h3>Employee {{ i }}</h3>
-                <label>Name:</label>
-                <input type="text" name="name_{{ i }}" required><br>
-                <label>Hourly Rate:</label>
-                <input type="number" name="rate_{{ i }}" step="0.01" required><br>
-                {% for day in ['sun','mon','tue','wed','thu','fri','sat'] %}
-                    <label>{{ day.capitalize() }} Hours:</label>
-                    <input type="number" name="{{ day }}_{{ i }}" step="0.1" value="0"><br>
+    <h1>Payroll Tracker for {{ today }}</h1>
+    <form method="POST">
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Hourly Rate</th>
+                    <th>Hours Worked</th>
+                    <th>Total Pay</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td>{{ emp.name }}</td>
+                    <td>${{ "%.2f"|format(emp.hourly_rate) }}</td>
+                    <td>
+                        <input type="number" name="hours_{{ emp.id }}" value="{{ entry_map.get(emp.id, '') }}" step="0.1" min="0">
+                    </td>
+                    <td class="total">
+                        {% if emp.id in entry_map %}
+                            ${{ "%.2f"|format(entry_map[emp.id] * emp.hourly_rate) }}
+                        {% endif %}
+                    </td>
+                </tr>
                 {% endfor %}
-                <hr>
-            {% endfor %}
-            <button type="submit">Submit Payroll</button>
-        </form>
-    {% endif %}
+            </tbody>
+        </table>
+        <br>
+        <button type="submit">Save</button>
+    </form>
 </body>
 </html>
