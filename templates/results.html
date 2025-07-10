@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Results</title>
+</head>
+<body>
+    <h1>Payroll Results for {{ date }}</h1>
+    <table border="1" cellpadding="5">
+        <tr>
+            <th>Name</th>
+            <th>Rate</th>
+            <th>Sun</th><th>Mon</th><th>Tue</th>
+            <th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+            <th>Total Hours</th>
+            <th>Total Pay</th>
+        </tr>
+        {% for emp in employees %}
+        <tr>
+            <td>{{ emp.name }}</td>
+            <td>{{ emp.rate }}</td>
+            {% for h in emp.hours %}
+                <td>{{ h }}</td>
+            {% endfor %}
+            <td>{{ emp.total_hours }}</td>
+            <td>${{ "%.2f"|format(emp.total_pay) }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <p><a href="/">← Log Another Day</a></p>
+</body>
+</html>
