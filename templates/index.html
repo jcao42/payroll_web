@@ -2,51 +2,42 @@
 <html>
 <head>
     <title>Payroll Tracker</title>
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 10px;
-            border: 1px solid #ddd;
-        }
-        input {
-            width: 100%;
-            box-sizing: border-box;
-        }
-    </style>
 </head>
 <body>
-    <h1>Payroll Tracker for {{ today }}</h1>
-    <form method="POST">
-        <table>
-            <thead>
-                <tr>
-                    <th>Employee</th>
-                    <th>Hourly Rate</th>
-                    <th>Hours Worked</th>
-                    <th>Total Pay</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for i, entry in enumerate(entries, 1) %}
-                <tr>
-                    <td><input type="text" name="name_{{ i }}" value="{{ entry.name }}"></td>
-                    <td><input type="number" step="0.01" name="rate_{{ i }}" value="{{ entry.rate }}"></td>
-                    <td><input type="number" step="0.01" name="hours_{{ i }}" value="{{ entry.hours }}"></td>
-                    <td>
-                        {% if entry.name %}
-                            ${{ "%.2f"|format(entry.rate * entry.hours) }}
-                        {% else %}
-                            —
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <button type="submit">Save</button>
+    <h1>Payroll Tracker</h1>
+
+    <h2>Add Employee</h2>
+    <form method="POST" action="/add_employee">
+        Name: <input type="text" name="name" required>
+        Rate: <input type="number" step="0.01" name="rate" required>
+        <button type="submit">Add</button>
     </form>
+
+    <h2>Employees & Balances</h2>
+    <table border="1">
+        <tr><th>Name</th><th>Rate</th><th>Balance</th><th>Actions</th></tr>
+        {% for emp in balances %}
+        <tr>
+            <td>{{ emp[1] }}</td>
+            <td>${{ emp[2] }}</td>
+            <td>${{ emp[3]|round(2) }}</td>
+            <td>
+                <form method="POST" action="/log_hours" style="display:inline;">
+                    <input type="hidden" name="employee_id" value="{{ emp[0] }}">
+                    Date: <input type="date" name="date" required>
+                    Hours: <input type="number" step="0.01" name="hours" required>
+                    <button type="submit">Add Hours</button>
+                </form>
+                <br>
+                <form method="POST" action="/make_payment" style="display:inline;">
+                    <input type="hidden" name="employee_id" value="{{ emp[0] }}">
+                    Date: <input type="date" name="date" required>
+                    Amount: <input type="number" step="0.01" name="amount" required>
+                    <button type="submit">Pay</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
 </body>
 </html>

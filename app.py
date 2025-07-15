@@ -1,55 +1,107 @@
-from flask import Flask, render_template, request, redirect
-from flask_sqlalchemy import SQLAlchemy
-from datetime import date
+from flask import Flask, render_template, request, redirect, url_for
+import sqlite3
 import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL", "sqlite:///payroll.db")
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
 
-class Entry(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100))
-    rate = db.Column(db.Float)
-    hours = db.Column(db.Float)
-    date = db.Column(db.String(10))
+DB_FILE = 'payroll.db'
 
-with app.app_context():
-    db.create_all()
+# ✅ Initialize Database
+def init_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS employees (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT,
+                        hourly_rate REAL)''')
 
-@app.route('/', methods=['GET', 'POST'])
+        c.execute('''CREATE TABLE IF NOT EXISTS work_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        employee_id INTEGER,
+                        date TEXT,
+                        hours REAL,
+                        FOREIGN KEY(employee_id) REFERENCES employees(id))''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS payments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        employee_id INTEGER,
+                        date TEXT,
+                        amount REAL,
+                        FOREIGN KEY(employee_id) REFERENCES employees(id))''')
+        conn.commit()
+
+# ✅ Get database connection
+def get_db():
+    return sqlite3.connect(DB_FILE)
+
+# ✅ Calculate balance for each employee
+def calculate_balance(employee_id):
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("SELECT hourly_rate FROM employees WHERE id=?", (employee_id,))
+        rate = c.fetchone()[0]
+
+        c.execute("SELECT SUM(hours) FROM work_logs WHERE employee_id=?", (employee_id,))
+        total_hours = c.fetchone()[0] or 0
+
+        c.execute("SELECT SUM(amount) FROM payments WHERE employee_id=?", (employee_id,))
+        total_paid = c.fetchone()[0] or 0
+
+    return (total_hours * rate) - total_paid
+
+@app.route('/')
 def index():
-    today = date.today().isoformat()
-    entries = Entry.query.filter_by(date=today).all()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("SELECT * FROM employees")
+        employees = c.fetchall()
 
-    if request.method == 'POST':
-        # Clear existing entries for today
-        Entry.query.filter_by(date=today).delete()
+        balances = []
+        for emp in employees:
+            emp_id, name, rate = emp
+            balance = calculate_balance(emp_id)
+            balances.append((emp_id, name, rate, balance))
 
-        for i in range(1, 11):  # Up to 10 rows
-            name = request.form.get(f'name_{i}')
-            rate = request.form.get(f'rate_{i}')
-            hours = request.form.get(f'hours_{i}')
-            if name and rate and hours:
-                try:
-                    entry = Entry(
-                        name=name,
-                        rate=float(rate),
-                        hours=float(hours),
-                        date=today
-                    )
-                    db.session.add(entry)
-                except ValueError:
-                    continue  # Ignore bad inputs
+    return render_template('index.html', balances=balances)
 
-        db.session.commit()
-        return redirect('/')
+@app.route('/add_employee', methods=['POST'])
+def add_employee():
+    name = request.form['name']
+    rate = float(request.form['rate'])
 
-    if not entries:
-        entries = [Entry(name='', rate=0.0, hours=0.0) for _ in range(5)]
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO employees (name, hourly_rate) VALUES (?, ?)", (name, rate))
+        conn.commit()
 
-    return render_template('index.html', entries=entries, today=today)
+    return redirect(url_for('index'))
+
+@app.route('/log_hours', methods=['POST'])
+def log_hours():
+    emp_id = int(request.form['employee_id'])
+    date = request.form['date']
+    hours = float(request.form['hours'])
+
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO work_logs (employee_id, date, hours) VALUES (?, ?, ?)", (emp_id, date, hours))
+        conn.commit()
+
+    return redirect(url_for('index'))
+
+@app.route('/make_payment', methods=['POST'])
+def make_payment():
+    emp_id = int(request.form['employee_id'])
+    date = request.form['date']
+    amount = float(request.form['amount'])
+
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO payments (employee_id, date, amount) VALUES (?, ?, ?)", (emp_id, date, amount))
+        conn.commit()
+
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    init_db()
+    app.run(host='0.0.0.0', port=5000, debug=True)
