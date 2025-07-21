@@ -1,107 +1,56 @@
-from flask import Flask, render_template, request, redirect, url_for
-import sqlite3
+from flask import Flask, render_template, request, redirect, session, url_for
+import datetime
 import os
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Use env variable in production
 
-DB_FILE = 'payroll.db'
+# Hardcoded credentials (move to env vars for security)
+USERNAME = os.environ.get("APP_USERNAME", "admin")
+PASSWORD = os.environ.get("APP_PASSWORD", "mypassword")
 
-# ✅ Initialize Database
-def init_db():
-    with sqlite3.connect(DB_FILE) as conn:
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS employees (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT,
-                        hourly_rate REAL)''')
+# Temporary in-memory payroll storage (could be replaced with DB)
+payroll_data = {}
 
-        c.execute('''CREATE TABLE IF NOT EXISTS work_logs (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        employee_id INTEGER,
-                        date TEXT,
-                        hours REAL,
-                        FOREIGN KEY(employee_id) REFERENCES employees(id))''')
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS payments (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        employee_id INTEGER,
-                        date TEXT,
-                        amount REAL,
-                        FOREIGN KEY(employee_id) REFERENCES employees(id))''')
-        conn.commit()
+        if username == USERNAME and password == PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="Invalid credentials")
+    return render_template('login.html')
 
-# ✅ Get database connection
-def get_db():
-    return sqlite3.connect(DB_FILE)
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
-# ✅ Calculate balance for each employee
-def calculate_balance(employee_id):
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute("SELECT hourly_rate FROM employees WHERE id=?", (employee_id,))
-        rate = c.fetchone()[0]
-
-        c.execute("SELECT SUM(hours) FROM work_logs WHERE employee_id=?", (employee_id,))
-        total_hours = c.fetchone()[0] or 0
-
-        c.execute("SELECT SUM(amount) FROM payments WHERE employee_id=?", (employee_id,))
-        total_paid = c.fetchone()[0] or 0
-
-    return (total_hours * rate) - total_paid
-
-@app.route('/')
+# Main payroll page
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute("SELECT * FROM employees")
-        employees = c.fetchall()
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
 
-        balances = []
-        for emp in employees:
-            emp_id, name, rate = emp
-            balance = calculate_balance(emp_id)
-            balances.append((emp_id, name, rate, balance))
+    today = datetime.date.today()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        hours = float(request.form.get('hours', 0))
+        rate = float(request.form.get('rate', 0))
 
-    return render_template('index.html', balances=balances)
+        if name:
+            if name not in payroll_data:
+                payroll_data[name] = {'total_hours': 0, 'rate': rate, 'owed': 0}
+            payroll_data[name]['total_hours'] += hours
+            payroll_data[name]['owed'] += hours * rate
 
-@app.route('/add_employee', methods=['POST'])
-def add_employee():
-    name = request.form['name']
-    rate = float(request.form['rate'])
-
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute("INSERT INTO employees (name, hourly_rate) VALUES (?, ?)", (name, rate))
-        conn.commit()
-
-    return redirect(url_for('index'))
-
-@app.route('/log_hours', methods=['POST'])
-def log_hours():
-    emp_id = int(request.form['employee_id'])
-    date = request.form['date']
-    hours = float(request.form['hours'])
-
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute("INSERT INTO work_logs (employee_id, date, hours) VALUES (?, ?, ?)", (emp_id, date, hours))
-        conn.commit()
-
-    return redirect(url_for('index'))
-
-@app.route('/make_payment', methods=['POST'])
-def make_payment():
-    emp_id = int(request.form['employee_id'])
-    date = request.form['date']
-    amount = float(request.form['amount'])
-
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute("INSERT INTO payments (employee_id, date, amount) VALUES (?, ?, ?)", (emp_id, date, amount))
-        conn.commit()
-
-    return redirect(url_for('index'))
+    return render_template('index.html', payroll=payroll_data, today=today)
 
 if __name__ == '__main__':
-    init_db()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)

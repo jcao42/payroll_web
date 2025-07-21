@@ -2,40 +2,38 @@
 <html>
 <head>
     <title>Payroll Tracker</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        table { width: 60%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border: 1px solid #ccc; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .logout { float: right; }
+    </style>
 </head>
 <body>
-    <h1>Payroll Tracker</h1>
-
-    <h2>Add Employee</h2>
-    <form method="POST" action="/add_employee">
-        Name: <input type="text" name="name" required>
-        Rate: <input type="number" step="0.01" name="rate" required>
-        <button type="submit">Add</button>
+    <h2>Payroll Tracker - {{ today }}</h2>
+    <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+    
+    <form method="POST">
+        <input type="text" name="name" placeholder="Employee Name" required>
+        <input type="number" name="hours" placeholder="Hours" step="0.1" required>
+        <input type="number" name="rate" placeholder="Rate" step="0.01" required>
+        <button type="submit">Add Hours</button>
     </form>
 
-    <h2>Employees & Balances</h2>
-    <table border="1">
-        <tr><th>Name</th><th>Rate</th><th>Balance</th><th>Actions</th></tr>
-        {% for emp in balances %}
+    <table>
         <tr>
-            <td>{{ emp[1] }}</td>
-            <td>${{ emp[2] }}</td>
-            <td>${{ emp[3]|round(2) }}</td>
-            <td>
-                <form method="POST" action="/log_hours" style="display:inline;">
-                    <input type="hidden" name="employee_id" value="{{ emp[0] }}">
-                    Date: <input type="date" name="date" required>
-                    Hours: <input type="number" step="0.01" name="hours" required>
-                    <button type="submit">Add Hours</button>
-                </form>
-                <br>
-                <form method="POST" action="/make_payment" style="display:inline;">
-                    <input type="hidden" name="employee_id" value="{{ emp[0] }}">
-                    Date: <input type="date" name="date" required>
-                    Amount: <input type="number" step="0.01" name="amount" required>
-                    <button type="submit">Pay</button>
-                </form>
-            </td>
+            <th>Name</th>
+            <th>Total Hours</th>
+            <th>Rate</th>
+            <th>Owed</th>
+        </tr>
+        {% for name, data in payroll.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ data.total_hours }}</td>
+            <td>${{ data.rate }}</td>
+            <td>${{ data.owed }}</td>
         </tr>
         {% endfor %}
     </table>
