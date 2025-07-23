@@ -1,41 +1,40 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Payroll Tracker</title>
-    <style>
-        body { font-family: Arial; margin: 20px; }
-        table { width: 60%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 10px; border: 1px solid #ccc; text-align: center; }
-        th { background-color: #f2f2f2; }
-        .logout { float: right; }
-    </style>
-</head>
-<body>
-    <h2>Payroll Tracker - {{ today }}</h2>
-    <a href="{{ url_for('logout') }}" class="logout">Logout</a>
-    
-    <form method="POST">
-        <input type="text" name="name" placeholder="Employee Name" required>
-        <input type="number" name="hours" placeholder="Hours" step="0.1" required>
-        <input type="number" name="rate" placeholder="Rate" step="0.01" required>
-        <button type="submit">Add Hours</button>
-    </form>
+<h2>Payroll Dashboard</h2>
+<a href="/logout">Logout</a>
 
-    <table>
-        <tr>
-            <th>Name</th>
-            <th>Total Hours</th>
-            <th>Rate</th>
-            <th>Owed</th>
-        </tr>
-        {% for name, data in payroll.items() %}
-        <tr>
-            <td>{{ name }}</td>
-            <td>{{ data.total_hours }}</td>
-            <td>${{ data.rate }}</td>
-            <td>${{ data.owed }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-</body>
-</html>
+<h3>Add Employee</h3>
+<form method="POST" action="/add_employee">
+    <input type="text" name="name" placeholder="Employee Name" required>
+    <input type="number" step="0.01" name="hourly_rate" placeholder="Hourly Rate" required>
+    <button type="submit">Add</button>
+</form>
+
+<h3>Employees</h3>
+<table border="1">
+<tr>
+    <th>Name</th><th>Rate</th><th>Total Owed</th><th>Paid</th><th>Balance</th><th>Add Hours</th><th>Record Payment</th>
+</tr>
+{% for emp in employees %}
+<tr>
+    <td>{{ emp.name }}</td>
+    <td>${{ emp.hourly_rate }}</td>
+    <td>${{ emp.total_owed }}</td>
+    <td>${{ emp.amount_paid }}</td>
+    <td><strong>${{ emp.balance }}</strong></td>
+    <td>
+        <form method="POST" action="/add_hours">
+            <input type="hidden" name="employee_id" value="{{ emp.id }}">
+            <input type="number" step="0.01" name="hours" placeholder="Hours">
+            <button type="submit">Add</button>
+        </form>
+    </td>
+    <td>
+        <form method="POST" action="/record_payment">
+            <input type="hidden" name="employee_id" value="{{ emp.id }}">
+            <input type="number" step="0.01" name="amount" placeholder="Amount">
+            <input type="date" name="date" value="{{ date.today() }}">
+            <button type="submit">Pay</button>
+        </form>
+    </td>
+</tr>
+{% endfor %}
+</table>
