@@ -18,9 +18,8 @@ class Employee(db.Model):
     total_hours = db.Column(db.Float, default=0)
     amount_owed = db.Column(db.Float, default=0)  # Outstanding balance
 
-# Initialize DB (only first time)
-@app.before_first_request
-def create_tables():
+# Create tables on startup
+with app.app_context():
     db.create_all()
 
 @app.route('/')
