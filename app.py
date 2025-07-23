@@ -1,56 +1,65 @@
-from flask import Flask, render_template, request, redirect, session, url_for
-import datetime
 import os
+from flask import Flask, render_template, request, redirect, url_for, session
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")  # Use env variable in production
+app.secret_key = os.environ.get('SECRET_KEY', 'secretkey')
 
-# Hardcoded credentials (move to env vars for security)
-USERNAME = os.environ.get("APP_USERNAME", "admin")
-PASSWORD = os.environ.get("APP_PASSWORD", "mypassword")
+# Connect to Neon PostgreSQL
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-# Temporary in-memory payroll storage (could be replaced with DB)
-payroll_data = {}
+# Employee model with balance tracking
+class Employee(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    hourly_rate = db.Column(db.Float, nullable=False)
+    total_hours = db.Column(db.Float, default=0)
+    amount_owed = db.Column(db.Float, default=0)  # Outstanding balance
 
-# Authentication routes
+# Initialize DB (only first time)
+@app.before_first_request
+def create_tables():
+    db.create_all()
+
+@app.route('/')
+def index():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    employees = Employee.query.all()
+    return render_template('index.html', employees=employees)
+
+@app.route('/add_hours', methods=['POST'])
+def add_hours():
+    emp_id = request.form.get('id')
+    hours = float(request.form.get('hours'))
+    emp = Employee.query.get(emp_id)
+    emp.total_hours += hours
+    emp.amount_owed += hours * emp.hourly_rate
+    db.session.commit()
+    return redirect(url_for('index'))
+
+@app.route('/pay', methods=['POST'])
+def pay():
+    emp_id = request.form.get('id')
+    amount = float(request.form.get('amount'))
+    emp = Employee.query.get(emp_id)
+    emp.amount_owed -= amount
+    if emp.amount_owed < 0:
+        emp.amount_owed = 0
+    db.session.commit()
+    return redirect(url_for('index'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-
-        if username == USERNAME and password == PASSWORD:
-            session['logged_in'] = True
+        username = request.form['username']
+        password = request.form['password']
+        if username == os.environ.get('APP_USERNAME') and password == os.environ.get('APP_PASSWORD'):
+            session['user'] = username
             return redirect(url_for('index'))
-        else:
-            return render_template('login.html', error="Invalid credentials")
     return render_template('login.html')
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
-# Main payroll page
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if not session.get('logged_in'):
-        return redirect(url_for('login'))
-
-    today = datetime.date.today()
-    if request.method == 'POST':
-        name = request.form.get('name')
-        hours = float(request.form.get('hours', 0))
-        rate = float(request.form.get('rate', 0))
-
-        if name:
-            if name not in payroll_data:
-                payroll_data[name] = {'total_hours': 0, 'rate': rate, 'owed': 0}
-            payroll_data[name]['total_hours'] += hours
-            payroll_data[name]['owed'] += hours * rate
-
-    return render_template('index.html', payroll=payroll_data, today=today)
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)
