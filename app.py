@@ -49,9 +49,8 @@ def update_schema():
             conn.execute(text('ALTER TABLE employee ADD COLUMN amount_paid FLOAT DEFAULT 0.0'))
             print("✅ Added amount_paid column")
 
-# Run schema check before first request
-@app.before_first_request
-def before_first_request():
+# Run schema check at startup
+with app.app_context():
     update_schema()
 
 # ----------------------
@@ -96,6 +95,7 @@ def make_payment():
     employee.amount_paid += amount
     db.session.commit()
     return redirect(url_for('index'))
+
 
 if __name__ == '__main__':
     import os
